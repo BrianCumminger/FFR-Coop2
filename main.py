@@ -18,45 +18,65 @@ KEYITEM_ORDER = [
 ]
 
 class FFRCoopClient:
-    def __init__(self, server, player, team=None):
+    def __init__(self, server, player, team=None, log_callback=None, bizhawk_client=None):
         self.server = server
         self.player = player
         self.team = team
+        self.log_callback = log_callback
         self.shardhuntmode = False
-        self.bizhawk = BizhawkClient(auto_start=True)
+        self.bizhawk = bizhawk_client if bizhawk_client else BizhawkClient(auto_start=True)
+        self._external_bizhawk = bool(bizhawk_client)
+        
+        if not self._external_bizhawk:
+            self.bizhawk.add_connection_callback(self._bizhawk_connection_callback)
+            
         self.local_items = {k: False for k in KEYITEM_ORDER}
         self.chaos_defeated_remotely = False
+        self._running = False
+        self.remotely_granted_items = set()
         
+    def _bizhawk_connection_callback(self, connected):
+        if connected:
+            self._log("Connected to Bizhawk emulator.")
+        else:
+            self._log("Disconnected from Bizhawk emulator. Waiting for connection...")
+            
+    def _log(self, message):
+        if self.log_callback:
+            self.log_callback(message)
+        else:
+            logging.info(message)
+
     def initialize_team(self, limit):
         url = f"http://{self.server}/init?player={urllib.parse.quote(self.player)}&limit={limit}"
-        logging.info(f"Initializing team: {url}")
+        self._log(f"Initializing team...")
         try:
             with urllib.request.urlopen(url) as response:
                 self.team = response.read().decode('utf-8').strip()
-                logging.info(f"Successfully created team {self.team}")
+                self._log(f"Successfully created team {self.team}")
         except Exception as e:
-            logging.error(f"Failed to initialize team: {e}")
-            sys.exit(1)
+            raise ConnectionError(str(e))
 
     def join_team(self):
         url = f"http://{self.server}/join?team={urllib.parse.quote(self.team)}&player={urllib.parse.quote(self.player)}"
-        logging.info(f"Joining team {self.team}: {url}")
+        self._log(f"Joining team {self.team}...")
         try:
             with urllib.request.urlopen(url) as response:
                 res = response.read().decode('utf-8').strip()
                 if "Error" in res:
-                    logging.error(f"Failed to join team: {res}")
-                    sys.exit(1)
-                logging.info(f"Successfully joined team {self.team}")
+                    raise ConnectionError(res)
+                self._log(f"Successfully joined team {self.team}")
+        except ConnectionError:
+            raise
         except Exception as e:
-            logging.error(f"Failed to join team: {e}")
-            sys.exit(1)
+            raise ConnectionError(str(e))
 
     def wait_for_bizhawk(self):
-        logging.info("Waiting for Bizhawk connection...")
-        while not self.bizhawk.is_connected:
+        while not self.bizhawk.is_connected and self._running:
             time.sleep(1)
-        logging.info("Connected to Bizhawk!")
+            
+        if not self._running:
+            return
         
         # Check for Shard Hunt mode
         req = [{"type": "READ", "address": 0x37761, "size": 1, "domain": "PRG ROM"}]
@@ -65,24 +85,17 @@ class FFRCoopClient:
             val = base64.b64decode(res[0]["value"])
             if val[0] == 0x1C:
                 self.shardhuntmode = True
-                logging.info("Detected Shard Hunt ROM")
+                self._log("Detected Shard Hunt ROM")
         else:
-            logging.warning("Failed to read PRG ROM to detect Shard Hunt. Defaulting to standard mode.")
+            self._log("Failed to read PRG ROM to detect Shard Hunt. Defaulting to standard mode.")
 
     def read_memory_blocks(self):
         # We need several blocks from System Bus
-        # Block 0: 0x0000 - 0x006B (covers 0x0000 Ship, 0x0008 Bridge, 0x000C Canal, 0x0012 Canoe, 0x0021-0x0034 Items, 0x006A btlformation)
-        # Wait, the user said writes are relative to save ram so we add 0x6000. 
-        # In ffr_team.lua: Lute was check u8(0x6021), write w_u8(0x0021). Wait! 0x0021 in Battery RAM == 0x6021 in System Bus.
-        # But if we use System Bus for reading AND writing, we just use 0x6000 offsets for both.
-        # The user clarification: "The writes in the giveItemFunctions table are relative to save ram, so they can be mapped into the "System Bus" domain by adding 0x6000 to them."
-        # This confirms we use 0x6000 offsets for both reads and writes.
-        # Let's do reads via System Bus directly.
         reqs = [
-            {"type": "READ", "address": 0x6000, "size": 0x35, "domain": "System Bus"},  # 0x6000 - 0x6034
-            {"type": "READ", "address": 0x6200, "size": 0x16, "domain": "System Bus"},  # 0x6200 - 0x6215
-            {"type": "READ", "address": 0x6B86, "size": 1, "domain": "System Bus"},     # 0x6B86 (Chaos Result)
-            {"type": "READ", "address": 0x6C92, "size": 1, "domain": "System Bus"},     # 0x6C92 (Chaos Battle Type)
+            {"type": "READ", "address": 0x6000, "size": 0x35, "domain": "System Bus"},  # 0x6000 - 0x6034 (Vehicles and Items)
+            {"type": "READ", "address": 0x6200, "size": 0x16, "domain": "System Bus"},  # 0x6200 - 0x6215 (Event flags)
+            {"type": "READ", "address": 0x6B86, "size": 1, "domain": "System Bus"},     # 0x6B86 (Chaos animation state)
+            {"type": "READ", "address": 0x6C92, "size": 1, "domain": "System Bus"},     # 0x6C92 (something important? I don't remember, it has to do with Chaos battle)
             {"type": "READ", "address": 0x006A, "size": 1, "domain": "System Bus"},     # 0x006A (Battle Formation)
             {"type": "READ", "address": 0x6102, "size": 1, "domain": "System Bus"},     # 0x6102 (Party check)
             {"type": "READ", "address": 0x60FC, "size": 1, "domain": "System Bus"},     # 0x60FC (Battle Type)
@@ -98,7 +111,7 @@ class FFRCoopClient:
             else:
                 return None
                 
-        # Helper to get u8
+        # Helper to get 8-bit uint from virtual address mapping
         def u8(addr):
             if 0x6000 <= addr <= 0x6034:
                 return data[0][addr - 0x6000]
@@ -175,7 +188,7 @@ class FFRCoopClient:
         return k
 
     def give_item(self, item, u8):
-        logging.info(f"Giving item to local player: {item}")
+        self._log(f"Giving item to local player: {item}")
         reqs = []
         
         def write_u8(addr, val):
@@ -215,6 +228,8 @@ class FFRCoopClient:
         elif item in item_actions:
             item_actions[item]()
 
+        self.remotely_granted_items.add(item)
+
         if reqs:
             self.bizhawk.send_command(reqs)
 
@@ -234,15 +249,23 @@ class FFRCoopClient:
             return None
 
     def run(self):
+        self._running = True
         self.wait_for_bizhawk()
-        logging.info("Starting main loop...")
+        
+        if not self._running:
+            return
+            
+        self._log("Starting main loop...")
         
         last_sync_time = 0
         last_data_str = ""
         
-        while True:
+        while self._running:
             time.sleep(1)
             if not self.bizhawk.is_connected:
+                continue
+
+            if not getattr(self, 'server_ready', True):
                 continue
 
             u8 = self.read_memory_blocks()
@@ -252,7 +275,22 @@ class FFRCoopClient:
             if not self.is_state_ok(u8):
                 continue
                 
-            self.local_items = self.get_local_key_items(u8)
+            new_local_items = self.get_local_key_items(u8)
+            
+            # Print messages for items obtained locally
+            for k in KEYITEM_ORDER:
+                if new_local_items[k] and not self.local_items[k]:
+                    if k in self.remotely_granted_items:
+                        self.remotely_granted_items.remove(k)
+                    else:
+                        if k == "EndGame":
+                            msg = f"{self.player} has defeated Chaos!"
+                        else:
+                            msg = f"{self.player} obtained item: {k}"
+                        self.display_message(msg)
+                        self._log(msg)
+            
+            self.local_items = new_local_items
             
             # Convert to string
             data_str = "".join(["1" if self.local_items[k] else "0" for k in KEYITEM_ORDER])
@@ -278,12 +316,23 @@ class FFRCoopClient:
                                 
                                 obtainer = playeritems[i] if i < len(playeritems) else "Someone"
                                 if k == "EndGame":
-                                    self.display_message(f"{obtainer} has defeated Chaos!")
+                                    msg = f"{obtainer} has defeated Chaos!"
+                                    self.display_message(msg)
+                                    self._log(msg)
                                 else:
-                                    self.display_message(f"{obtainer} obtained item: {k}")
+                                    msg = f"{obtainer} obtained item: {k}"
+                                    self.display_message(msg)
+                                    self._log(msg)
                     
                     for msg in messages:
                         self.display_message(msg)
+                        self._log(msg)
+                        
+    def stop(self):
+        self._running = False
+        # Do not stop bizhawk if it was provided externally, let the creator manage it
+        if not hasattr(self, '_external_bizhawk') or not self._external_bizhawk:
+            self.bizhawk.stop()
 
 if __name__ == "__main__":
     config = configparser.ConfigParser()

@@ -190,6 +190,9 @@ class BizhawkClient:
                     cmd_data = [{"type": "PING"}]
                     callback_func = None
                     
+                if not self._running or not self._socket:
+                    break
+                    
                 first_message = False
 
                 # Build the payload, ensuring we append the newline needed by LuaSocket
