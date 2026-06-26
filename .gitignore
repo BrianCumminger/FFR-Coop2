@@ -1,0 +1,7 @@
+old-version
+new-bizhawk-connector
+__pycache__
+Lib
+Scripts
+pyvenv.cfg
+*.nes
