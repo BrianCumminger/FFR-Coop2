@@ -1,7 +1,9 @@
 old-version
 new-bizhawk-connector
 __pycache__
-Lib
+Lib/
 Scripts
 pyvenv.cfg
 *.nes
+dist/
+build/

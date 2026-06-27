@@ -1,0 +1,1 @@
+pyinstaller --noconsole --onefile --collect-all customtkinter --add-data "resources;resources" --icon="resources\ffrcoop2.ico" gui.py

@@ -4,9 +4,19 @@ import threading
 import datetime
 import sys
 import os
-from PIL import Image
+import tkinter as tk
 from main import FFRCoopClient
 from bizhawk_client import BizhawkClient
+
+def resource_path(relative_path):
+    """ Get absolute path to resource for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 # Appearance Mode is set dynamically in __init__
 ctk.set_default_color_theme("blue")
@@ -49,13 +59,13 @@ class FFRCoopGUI(ctk.CTk):
         super().__init__()
 
         self.title("FFR Co-op Client 2.0")
-        self.geometry("550x450")
-        self.minsize(500, 450)
+        self.geometry("550x500")
+        self.minsize(500, 500)
         
         self.config = configparser.ConfigParser()
         self.config.read('config.ini')
         self.default_server = self.config.get('Settings', 'ServerAddress', fallback='')
-        self.default_player = self.config.get('Settings', 'DefaultPlayer', fallback='Player1')
+        self.default_player = self.config.get('Settings', 'DefaultPlayer', fallback='LazyRacer')
         self.show_timestamps = self.config.getboolean('Settings', 'ShowTimestamps', fallback=True)
         self.appearance_mode = self.config.get('Settings', 'AppearanceMode', fallback='System')
         
@@ -68,12 +78,12 @@ class FFRCoopGUI(ctk.CTk):
         self.bizhawk.add_connection_callback(self.on_bizhawk_connection_change)
 
         # Status Images
-        self.img_disconnected = ctk.CTkImage(Image.open(r"resources\th4.png"), size=(35, 27))
-        self.img_connected = ctk.CTkImage(Image.open(r"resources\th3.png"), size=(35, 27))
+        self.img_disconnected = tk.PhotoImage(file=resource_path(r"resources\th4.png"))
+        self.img_connected = tk.PhotoImage(file=resource_path(r"resources\th3.png"))
 
         self.lbl_status_icon = ctk.CTkLabel(self, text="", image=self.img_disconnected)
 
-        self.iconbitmap(r"resources\ffrcoop2.ico")
+        self.iconbitmap(resource_path(r"resources\ffrcoop2.ico"))
 
         # Create Tabview
         self.tabview = ctk.CTkTabview(self, width=450, height=400)
@@ -144,25 +154,32 @@ class FFRCoopGUI(ctk.CTk):
         self.entry_server.grid(row=1, column=0, pady=0, padx=20, sticky="w")
         self.entry_server.insert(0, self.default_server)
         
+        # Default Player Name
+        lbl_default_player = ctk.CTkLabel(self.tab_settings, text="Default Player Name:")
+        lbl_default_player.grid(row=2, column=0, pady=(10, 5), padx=20, sticky="w")
+        self.entry_default_player = ctk.CTkEntry(self.tab_settings, width=300)
+        self.entry_default_player.grid(row=3, column=0, pady=0, padx=20, sticky="w")
+        self.entry_default_player.insert(0, self.default_player)
+        
         # Timestamps Toggle
         self.var_timestamps = ctk.BooleanVar(value=self.show_timestamps)
         self.chk_timestamps = ctk.CTkSwitch(self.tab_settings, text="Show Timestamps in Messages", variable=self.var_timestamps)
-        self.chk_timestamps.grid(row=2, column=0, pady=(10, 10), padx=20, sticky="w")
+        self.chk_timestamps.grid(row=4, column=0, pady=(10, 10), padx=20, sticky="w")
         
         # Appearance Mode
         lbl_appearance = ctk.CTkLabel(self.tab_settings, text="Appearance Mode:")
-        lbl_appearance.grid(row=3, column=0, pady=(10, 0), padx=20, sticky="w")
+        lbl_appearance.grid(row=5, column=0, pady=(10, 0), padx=20, sticky="w")
         self.var_appearance = ctk.StringVar(value=self.appearance_mode)
         self.opt_appearance = ctk.CTkOptionMenu(self.tab_settings, values=["System", "Dark", "Light"], variable=self.var_appearance, command=self.on_appearance_change)
-        self.opt_appearance.grid(row=4, column=0, pady=(5, 10), padx=20, sticky="w")
+        self.opt_appearance.grid(row=6, column=0, pady=(5, 10), padx=20, sticky="w")
         
         # Save Button
         self.btn_save = ctk.CTkButton(self.tab_settings, text="Save Settings", command=self.on_save_settings)
-        self.btn_save.grid(row=5, column=0, pady=(20, 10), padx=20, sticky="w")
+        self.btn_save.grid(row=7, column=0, pady=(20, 10), padx=20, sticky="w")
         
         # Credits Button
         self.btn_credits = ctk.CTkButton(self.tab_settings, text="View Credits", fg_color="transparent", border_width=2, command=self.on_view_credits)
-        self.btn_credits.grid(row=6, column=0, pady=(30, 10), padx=20, sticky="e")
+        self.btn_credits.grid(row=8, column=0, pady=(30, 10), padx=20, sticky="e")
 
     def on_appearance_change(self, new_mode):
         ctk.set_appearance_mode(new_mode)
@@ -221,7 +238,7 @@ class FFRCoopGUI(ctk.CTk):
 
     def on_save_settings(self):
         new_server = self.entry_server.get().strip()
-        new_player = self.entry_player.get().strip()
+        new_player = self.entry_default_player.get().strip()
         new_timestamps = self.var_timestamps.get()
         new_appearance = self.var_appearance.get()
         
