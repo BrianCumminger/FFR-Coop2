@@ -348,7 +348,6 @@ if __name__ == "__main__":
     parser.add_argument("--server", type=str, default=default_server, help="Server address/port (e.g., ffr.dpldocs.info:5555)")
     
     args = parser.parse_args()
-
     if not args.server:
         print("Error: ServerAddress is not configured in config.ini and no --server argument was provided.")
         sys.exit(1)
