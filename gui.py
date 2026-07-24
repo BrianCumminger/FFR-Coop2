@@ -63,7 +63,8 @@ class FFRCoopGUI(ctk.CTk):
         self.minsize(500, 500)
         
         self.config = configparser.ConfigParser()
-        self.config.read('config.ini')
+        config_files_read = self.config.read('config.ini')
+        self.is_first_run = len(config_files_read) == 0
         self.default_server = self.config.get('Settings', 'ServerAddress', fallback='')
         self.default_player = self.config.get('Settings', 'DefaultPlayer', fallback='LazyRacer')
         self.show_timestamps = self.config.getboolean('Settings', 'ShowTimestamps', fallback=True)
@@ -100,6 +101,9 @@ class FFRCoopGUI(ctk.CTk):
         self.build_connect_tab()
         self.build_logs_tab()
         self.build_settings_tab()
+        
+        if self.is_first_run:
+            self.tabview.set("Settings")
 
     def build_connect_tab(self):
         self.tab_connect.grid_columnconfigure(0, weight=1)
@@ -178,7 +182,7 @@ class FFRCoopGUI(ctk.CTk):
         self.btn_save.grid(row=7, column=0, pady=(20, 10), padx=20, sticky="w")
         
         # Credits Button
-        self.btn_credits = ctk.CTkButton(self.tab_settings, text="View Credits", fg_color="transparent", border_width=2, command=self.on_view_credits)
+        self.btn_credits = ctk.CTkButton(self.tab_settings, text="View Credits", command=self.on_view_credits)
         self.btn_credits.grid(row=8, column=0, pady=(30, 10), padx=20, sticky="e")
 
     def on_appearance_change(self, new_mode):
@@ -241,6 +245,9 @@ class FFRCoopGUI(ctk.CTk):
         new_player = self.entry_default_player.get().strip()
         new_timestamps = self.var_timestamps.get()
         new_appearance = self.var_appearance.get()
+        
+        if new_player and hasattr(self, 'entry_player_var'):
+            self.entry_player_var.set(new_player)
         
         if not self.config.has_section('Settings'):
             self.config.add_section('Settings')
