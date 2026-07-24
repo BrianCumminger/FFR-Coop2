@@ -10,6 +10,8 @@ import sys
 from bizhawk_client import BizhawkClient
 from itemlocationdata import LOCATIONS, ITEMS
 
+VERSION = "2.0-b2"
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 
 KEYITEM_ORDER = [

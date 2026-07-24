@@ -5,7 +5,7 @@ import datetime
 import sys
 import os
 import tkinter as tk
-from main import FFRCoopClient
+from main import FFRCoopClient, VERSION
 from bizhawk_client import BizhawkClient
 
 def resource_path(relative_path):
@@ -30,10 +30,10 @@ Willcleosis, TrintonGL, monoci85, Falconic, neongrey, MoistMogwai
 Special thanks to everyone who has played and given feedback!"""
 
 
-class CreditsDialog(ctk.CTkToplevel):
+class AboutDialog(ctk.CTkToplevel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.title("Credits")
+        self.title("About")
         self.geometry("400x350")
         
         # Center window
@@ -45,7 +45,7 @@ class CreditsDialog(ctk.CTkToplevel):
         lbl_for = ctk.CTkLabel(self, text="for", font=ctk.CTkFont(size=14))
         lbl_for.pack(pady=0)
         
-        lbl_sub = ctk.CTkLabel(self, text="Final Fantasy Randomizer", font=ctk.CTkFont(size=18, weight="bold"))
+        lbl_sub = ctk.CTkLabel(self, text=f"Final Fantasy Randomizer\nVersion {VERSION}", font=ctk.CTkFont(size=18, weight="bold"))
         lbl_sub.pack(pady=(5, 20))
         
         textbox = ctk.CTkTextbox(self, width=350, height=180, wrap="word")
@@ -58,7 +58,7 @@ class FFRCoopGUI(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("FFR Co-op Client 2.0")
+        self.title(f"FFR Co-op Client {VERSION}")
         self.geometry("550x500")
         self.minsize(500, 500)
         
@@ -181,9 +181,9 @@ class FFRCoopGUI(ctk.CTk):
         self.btn_save = ctk.CTkButton(self.tab_settings, text="Save Settings", command=self.on_save_settings)
         self.btn_save.grid(row=7, column=0, pady=(20, 10), padx=20, sticky="w")
         
-        # Credits Button
-        self.btn_credits = ctk.CTkButton(self.tab_settings, text="View Credits", command=self.on_view_credits)
-        self.btn_credits.grid(row=8, column=0, pady=(30, 10), padx=20, sticky="e")
+        # About Button
+        self.btn_about = ctk.CTkButton(self.tab_settings, text="About", command=self.on_view_about)
+        self.btn_about.grid(row=8, column=0, pady=(30, 10), padx=20, sticky="e")
 
     def on_appearance_change(self, new_mode):
         ctk.set_appearance_mode(new_mode)
@@ -266,8 +266,8 @@ class FFRCoopGUI(ctk.CTk):
         self.appearance_mode = new_appearance
         self.log("Settings saved.")
 
-    def on_view_credits(self):
-        dialog = CreditsDialog(self)
+    def on_view_about(self):
+        dialog = AboutDialog(self)
         dialog.grab_set()
 
     def on_connect(self):
