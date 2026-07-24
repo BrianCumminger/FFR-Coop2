@@ -9,7 +9,7 @@ BUILD_TYPE = os.environ.get('BUILD_TYPE', 'both_onedir').lower()
 datas, binaries, hiddenimports = collect_all('customtkinter')
 
 # Add our custom resources
-datas += [('resources', 'resources')]
+datas += [('resources', 'resources'), ('LICENSE', '.')]
 
 if BUILD_TYPE == 'both_onedir':
     # -------------------------------------------------------------------------
