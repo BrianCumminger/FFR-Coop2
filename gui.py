@@ -34,7 +34,7 @@ class AboutDialog(ctk.CTkToplevel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.title("About")
-        self.geometry("400x350")
+        self.geometry("500x350")
         
         # Center window
         self.update_idletasks()
@@ -49,8 +49,16 @@ class AboutDialog(ctk.CTkToplevel):
         lbl_sub.pack(pady=(5, 20))
         
         textbox = ctk.CTkTextbox(self, width=350, height=180, wrap="word")
-        textbox.pack(padx=20, pady=10)
+        textbox.pack(padx=20, pady=10, fill="both", expand=True)
         textbox.insert("0.0", CREDITS_TEXT)
+        
+        try:
+            with open(resource_path("LICENSE"), "r", encoding="utf-8") as f:
+                license_text = f.read()
+            textbox.insert("end", "\n\n=== LICENSE ===\n\n" + license_text)
+        except Exception as e:
+            print(f"Warning: Could not load LICENSE file: {e}")
+            
         textbox.configure(state="disabled")
 
 
@@ -91,7 +99,7 @@ class FFRCoopGUI(ctk.CTk):
         self.tabview.pack(padx=20, pady=(20, 40), fill="both", expand=True)
         
         # Place icon in the bottom padding
-        self.lbl_status_icon.place(x=20, rely=0.98, anchor="sw")
+        self.lbl_status_icon.place(x=20, rely=1.0, y=-10, anchor="sw")
         self.lbl_status_icon.lift()
 
         self.tab_connect = self.tabview.add("Connect")
