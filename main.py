@@ -8,6 +8,7 @@ import base64
 import logging
 import sys
 from bizhawk_client import BizhawkClient
+from itemlocationdata import LOCATIONS, ITEMS
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 
@@ -34,6 +35,7 @@ class FFRCoopClient:
         self.chaos_defeated_remotely = False
         self._running = False
         self.remotely_granted_items = set()
+        self.item_locations = {}
         
     def _bizhawk_connection_callback(self, connected):
         if connected:
@@ -88,6 +90,48 @@ class FFRCoopClient:
                 self._log("Detected Shard Hunt ROM")
         else:
             self._log("Failed to read PRG ROM to detect Shard Hunt. Defaulting to standard mode.")
+            
+        self.read_item_locations_from_rom()
+
+    def read_item_locations_from_rom(self):
+        self._log("Reading item locations from ROM...")
+        
+        # Consolidate reads into two blocks for chests (0x3101-0x31FF) and NPCs (0x47A00-0x47A85)
+        reqs = [
+            {"type": "READ", "address": 0x3100, "size": 0x100, "domain": "PRG ROM"},
+            {"type": "READ", "address": 0x47A00, "size": 0x85, "domain": "PRG ROM"}
+        ]
+            
+        res = self.bizhawk.send_command(reqs)
+        if not res or len(res) != 2:
+            self._log("Failed to read item locations from ROM.")
+            return
+            
+        block1 = base64.b64decode(res[0]["value"]) if res[0].get("type") == "READ_RESPONSE" else None
+        block2 = base64.b64decode(res[1]["value"]) if res[1].get("type") == "READ_RESPONSE" else None
+        
+        if not block1 or not block2:
+            self._log("Failed to parse item location blocks from ROM.")
+            return
+            
+        def get_val(addr):
+            if 0x3100 <= addr < 0x3200:
+                return block1[addr - 0x3100]
+            elif 0x47A00 <= addr < 0x47A85:
+                return block2[addr - 0x47A00]
+            return None
+            
+        item_id_to_name = {item_id: item_name for item_name, item_id in ITEMS}
+        
+        self.item_locations = {}
+        for loc_name, addr in LOCATIONS:
+            val = get_val(addr)
+            if val is not None:
+                item_name = item_id_to_name.get(val)
+                if item_name:
+                    self.item_locations[item_name] = loc_name
+                    
+        self._log(f"Successfully mapped {len(self.item_locations)} item locations.")
 
     def read_memory_blocks(self):
         # We need several blocks from System Bus
@@ -285,10 +329,17 @@ class FFRCoopClient:
                     else:
                         if k == "EndGame":
                             msg = f"{self.player} has defeated Chaos!"
+                            self.display_message(msg)
+                            self._log(msg)
+                        elif k in self.item_locations:
+                            loc = self.item_locations[k]
+                            msg = f"{self.player} obtained item: {k} (found at {loc})"
+                            self.display_message(msg)
+                            self._log(msg)
                         else:
                             msg = f"{self.player} obtained item: {k}"
-                        self.display_message(msg)
-                        self._log(msg)
+                            self.display_message(msg)
+                            self._log(msg)
             
             self.local_items = new_local_items
             
