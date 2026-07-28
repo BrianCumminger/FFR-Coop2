@@ -39,6 +39,10 @@ class FFRCoopClient:
         self.remotely_granted_items = set()
         self.item_locations = {}
         
+        config = configparser.ConfigParser()
+        config.read('config.ini')
+        self.show_item_locations = config.getboolean('Settings', 'showitemlocations', fallback=False)
+        
     def _bizhawk_connection_callback(self, connected):
         if connected:
             self._log("Connected to Bizhawk emulator.")
@@ -96,6 +100,9 @@ class FFRCoopClient:
         self.read_item_locations_from_rom()
 
     def read_item_locations_from_rom(self):
+        if not self.show_item_locations:
+            return
+            
         self._log("Reading item locations from ROM...")
         
         # Consolidate reads into two blocks for chests (0x3101-0x31FF) and NPCs (0x47A00-0x47A85)
@@ -370,6 +377,11 @@ class FFRCoopClient:
                                 obtainer = playeritems[i] if i < len(playeritems) else "Someone"
                                 if k == "EndGame":
                                     msg = f"{obtainer} has defeated Chaos!"
+                                    self.display_message(msg)
+                                    self._log(msg)
+                                elif k in self.item_locations:
+                                    loc = self.item_locations[k]
+                                    msg = f"{obtainer} obtained item: {k} (found at {loc})"
                                     self.display_message(msg)
                                     self._log(msg)
                                 else:
