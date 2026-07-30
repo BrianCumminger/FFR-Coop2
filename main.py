@@ -9,6 +9,7 @@ import logging
 import sys
 from bizhawk_client import BizhawkClient
 from itemlocationdata import LOCATIONS, ITEMS
+from server_client import ServerClientV1
 
 VERSION = "2.0-b2"
 
@@ -26,9 +27,26 @@ class FFRCoopClient:
         self.player = player
         self.team = team
         self.log_callback = log_callback
+        
+        self.server_version = self._get_server_version()
+        if self.server_version == "0.13;0.13":
+            self.server_client = ServerClientV1(server, player, team, log_callback=self._log)
+        else:
+            self._log(f"Warning: Unknown or empty server version '{self.server_version}'. Defaulting to V1 client.")
+            self.server_client = ServerClientV1(server, player, team, log_callback=self._log)
+            
         self.shardhuntmode = False
         self.bizhawk = bizhawk_client if bizhawk_client else BizhawkClient(auto_start=True)
         self._external_bizhawk = bool(bizhawk_client)
+
+    def _get_server_version(self):
+        url = f"http://{self.server}/version"
+        try:
+            with urllib.request.urlopen(url, timeout=5) as response:
+                return response.read().decode('utf-8').strip()
+        except Exception as e:
+            self._log(f"Warning: Could not fetch server version: {e}")
+            return ""
         
         if not self._external_bizhawk:
             self.bizhawk.add_connection_callback(self._bizhawk_connection_callback)
@@ -56,28 +74,12 @@ class FFRCoopClient:
             logging.info(message)
 
     def initialize_team(self, limit):
-        url = f"http://{self.server}/init?player={urllib.parse.quote(self.player)}&limit={limit}"
-        self._log(f"Initializing team...")
-        try:
-            with urllib.request.urlopen(url) as response:
-                self.team = response.read().decode('utf-8').strip()
-                self._log(f"Successfully created team {self.team}")
-        except Exception as e:
-            raise ConnectionError(str(e))
+        self.server_client.initialize_team(limit)
+        self.team = self.server_client.team
 
     def join_team(self):
-        url = f"http://{self.server}/join?team={urllib.parse.quote(self.team)}&player={urllib.parse.quote(self.player)}"
-        self._log(f"Joining team {self.team}...")
-        try:
-            with urllib.request.urlopen(url) as response:
-                res = response.read().decode('utf-8').strip()
-                if "Error" in res:
-                    raise ConnectionError(res)
-                self._log(f"Successfully joined team {self.team}")
-        except ConnectionError:
-            raise
-        except Exception as e:
-            raise ConnectionError(str(e))
+        self.server_client.join_team()
+        self.team = self.server_client.team
 
     def wait_for_bizhawk(self):
         while not self.bizhawk.is_connected and self._running:
@@ -241,7 +243,8 @@ class FFRCoopClient:
         return k
 
     def give_item(self, item, u8):
-        self._log(f"Giving item to local player: {item}")
+        if item != "EndGame":
+            self._log(f"Giving item to local player: {item}")
         reqs = []
         
         def write_u8(addr, val):
@@ -289,17 +292,6 @@ class FFRCoopClient:
     def display_message(self, message):
         req = [{"type": "DISPLAY_MESSAGE", "message": message}]
         self.bizhawk.send_command(req)
-
-    def sync_with_server(self, data_str):
-        url = f"http://{self.server}/coop?team={urllib.parse.quote(self.team)}&player={urllib.parse.quote(self.player)}&data={data_str}"
-        try:
-            with urllib.request.urlopen(url) as response:
-                res_str = response.read().decode('utf-8').strip()
-                # Server response is JSON {"data": "10010...", "messages": [], "playeritems": []}
-                return json.loads(res_str)
-        except Exception as e:
-            logging.error(f"Error syncing with server: {e}")
-            return None
 
     def run(self):
         self._running = True
@@ -358,7 +350,7 @@ class FFRCoopClient:
             current_time = time.time()
             if data_str != last_data_str or (current_time - last_sync_time) >= 5:
                 # Sync with server
-                server_res = self.sync_with_server(data_str)
+                server_res = self.server_client.sync_with_server(data_str)
                 last_sync_time = current_time
                 last_data_str = data_str
                 
