@@ -1,7 +1,9 @@
 # Co-op 2.0
 ## for Final Fantasy Randomizer
 
-This project is a modern client for FFR Co-op written in Python with TK gui components. It uses the Archipelago BizHawk client connector lua instead of a custom connector and requires no extra DLL installation.
+Co-op play mode for Final Fantasy Randomizer is a game mode where 2 or more players share key items over a network connection. 
+
+This project is a modern client for FFR Co-op written in Python with TK gui components. It uses the Archipelago BizHawk client connector lua instead of a custom connector and requires no extra DLL installation. Both the original Co-op server and the new server included with this project are supported.
 
 ![screenshot](resources/screenshot.png)
 
