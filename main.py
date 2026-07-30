@@ -9,7 +9,7 @@ import logging
 import sys
 from bizhawk_client import BizhawkClient
 from itemlocationdata import LOCATIONS, ITEMS
-from server_client import ServerClientV1
+from server_client import ServerClientV1, ServerClientV2
 
 VERSION = "2.0-b2"
 
@@ -21,74 +21,26 @@ KEYITEM_ORDER = [
     "Airship", "Bridge", "Canal", "SlabTranslation", "EarthOrb", "FireOrb", "WaterOrb", "AirOrb", "EndGame"
 ]
 
-class FFRCoopClient:
-    def __init__(self, server, player, team=None, log_callback=None, bizhawk_client=None):
-        self.server = server
-        self.player = player
-        self.team = team
+class FFRGameInterface:
+    def __init__(self, bizhawk_client, log_callback=None):
+        self.bizhawk = bizhawk_client
         self.log_callback = log_callback
         
-        self.server_version = self._get_server_version()
-        if self.server_version == "0.13;0.13":
-            self.server_client = ServerClientV1(server, player, team, log_callback=self._log)
-        else:
-            self._log(f"Warning: Unknown or empty server version '{self.server_version}'. Defaulting to V1 client.")
-            self.server_client = ServerClientV1(server, player, team, log_callback=self._log)
-            
         self.shardhuntmode = False
-        self.bizhawk = bizhawk_client if bizhawk_client else BizhawkClient(auto_start=True)
-        self._external_bizhawk = bool(bizhawk_client)
-
-    def _get_server_version(self):
-        url = f"http://{self.server}/version"
-        try:
-            with urllib.request.urlopen(url, timeout=5) as response:
-                return response.read().decode('utf-8').strip()
-        except Exception as e:
-            self._log(f"Warning: Could not fetch server version: {e}")
-            return ""
-        
-        if not self._external_bizhawk:
-            self.bizhawk.add_connection_callback(self._bizhawk_connection_callback)
-            
-        self.local_items = {k: False for k in KEYITEM_ORDER}
-        self.chaos_defeated_remotely = False
-        self._running = False
-        self.remotely_granted_items = set()
+        self.chaos_defeated = False
         self.item_locations = {}
         
         config = configparser.ConfigParser()
         config.read('config.ini')
         self.show_item_locations = config.getboolean('Settings', 'showitemlocations', fallback=False)
-        
-    def _bizhawk_connection_callback(self, connected):
-        if connected:
-            self._log("Connected to Bizhawk emulator.")
-        else:
-            self._log("Disconnected from Bizhawk emulator. Waiting for connection...")
-            
+
     def _log(self, message):
         if self.log_callback:
             self.log_callback(message)
         else:
             logging.info(message)
 
-    def initialize_team(self, limit):
-        self.server_client.initialize_team(limit)
-        self.team = self.server_client.team
-
-    def join_team(self):
-        self.server_client.join_team()
-        self.team = self.server_client.team
-
-    def wait_for_bizhawk(self):
-        while not self.bizhawk.is_connected and self._running:
-            time.sleep(1)
-            
-        if not self._running:
-            return
-        
-        # Check for Shard Hunt mode
+    def check_shardhunt_mode(self):
         req = [{"type": "READ", "address": 0x37761, "size": 1, "domain": "PRG ROM"}]
         res = self.bizhawk.send_command(req)
         if res and res[0].get("type") == "READ_RESPONSE":
@@ -98,8 +50,6 @@ class FFRCoopClient:
                 self._log("Detected Shard Hunt ROM")
         else:
             self._log("Failed to read PRG ROM to detect Shard Hunt. Defaulting to standard mode.")
-            
-        self.read_item_locations_from_rom()
 
     def read_item_locations_from_rom(self):
         if not self.show_item_locations:
@@ -237,14 +187,13 @@ class FFRCoopClient:
         k["Ship"] = (u8(0x6000) & 0x01) > 0
         k["SlabTranslation"] = (u8(0x620B) & 0x02) > 0
         
-        if self.is_chaos_dead(u8) or self.chaos_defeated_remotely:
+        if self.is_chaos_dead(u8) or self.chaos_defeated:
+            self.chaos_defeated = True
             k["EndGame"] = True
             
         return k
 
     def give_item(self, item, u8):
-        if item != "EndGame":
-            self._log(f"Giving item to local player: {item}")
         reqs = []
         
         def write_u8(addr, val):
@@ -279,12 +228,8 @@ class FFRCoopClient:
             "AirOrb": lambda: write_u8(0x6034, 0x01),
         }
 
-        if item == "EndGame": 
-            self.chaos_defeated_remotely = True
-        elif item in item_actions:
+        if item in item_actions:
             item_actions[item]()
-
-        self.remotely_granted_items.add(item)
 
         if reqs:
             self.bizhawk.send_command(reqs)
@@ -292,6 +237,143 @@ class FFRCoopClient:
     def display_message(self, message):
         req = [{"type": "DISPLAY_MESSAGE", "message": message}]
         self.bizhawk.send_command(req)
+
+
+class FFRCoopClient:
+    def __init__(self, server, player, team=None, log_callback=None, bizhawk_client=None):
+        self.server = server
+        self.player = player
+        self.team = team
+        self.log_callback = log_callback
+        
+        self.server_version = self._get_server_version()
+        if self.server_version == "2.0":
+            self.server_client = ServerClientV2(server, player, team, log_callback=self._log,
+                                               message_callback=self._on_server_message)
+            self.server_client.connect()
+        elif self.server_version == "0.13;0.13":
+            self.server_client = ServerClientV1(server, player, team, log_callback=self._log)
+        else:
+            self._log(f"Warning: Unknown or empty server version '{self.server_version}'. Defaulting to V1 client.")
+            self.server_client = ServerClientV1(server, player, team, log_callback=self._log)
+            
+        self.bizhawk = bizhawk_client if bizhawk_client else BizhawkClient(auto_start=True)
+        self._external_bizhawk = bool(bizhawk_client)
+
+        if not self._external_bizhawk:
+            self.bizhawk.add_connection_callback(self._bizhawk_connection_callback)
+            
+        self.game = FFRGameInterface(self.bizhawk, self._log)
+            
+        self.local_items = {k: False for k in KEYITEM_ORDER}
+        self.remotely_granted_items = set()
+        self._running = False
+
+    def _get_server_version(self):
+        url = f"http://{self.server}/version"
+        try:
+            with urllib.request.urlopen(url, timeout=5) as response:
+                return response.read().decode('utf-8').strip()
+        except Exception as e:
+            self._log(f"Warning: Could not fetch server version: {e}")
+            return ""
+        
+    def _bizhawk_connection_callback(self, connected):
+        if connected:
+            self._log("Connected to Bizhawk emulator.")
+        else:
+            self._log("Disconnected from Bizhawk emulator. Waiting for connection...")
+            
+    def _log(self, message):
+        if self.log_callback:
+            self.log_callback(message)
+        else:
+            logging.info(message)
+
+    def _on_server_message(self, player, message):
+        """Callback for V2 server-pushed messages."""
+        self.game.display_message(message)
+        self._log(message)
+
+    def _format_item_message(self, player_name, item_name):
+        if item_name == "EndGame":
+            return f"{player_name} has defeated Chaos!"
+            
+        loc = self.game.item_locations.get(item_name)
+        if loc:
+            return f"{player_name} obtained item: {item_name} (found at {loc})"
+        return f"{player_name} obtained item: {item_name}"
+        
+    def _broadcast_event(self, msg):
+        self.game.display_message(msg)
+        self._log(msg)
+        self.server_client.send_message(msg)
+
+    def initialize_team(self, limit):
+        self.server_client.initialize_team(limit)
+        self.team = self.server_client.team
+        self.server_client.send_message(f"{self.player} has connected.")
+
+    def join_team(self):
+        self.server_client.join_team()
+        self.team = self.server_client.team
+        self.server_client.send_message(f"{self.player} has connected.")
+
+    def wait_for_bizhawk(self):
+        while not self.bizhawk.is_connected and self._running:
+            time.sleep(1)
+            
+        if not self._running:
+            return
+            
+        self.game.check_shardhunt_mode()
+        self.game.read_item_locations_from_rom()
+
+    def _process_local_changes(self, new_local_items, first_loop):
+        for k in KEYITEM_ORDER:
+            if new_local_items[k] and not self.local_items[k]:
+                if k in self.remotely_granted_items:
+                    self.remotely_granted_items.remove(k)
+                elif not first_loop:
+                    msg = self._format_item_message(self.player, k)
+                    self._broadcast_event(msg)
+                    
+        self.local_items = new_local_items
+
+    def _process_remote_changes(self, server_res, u8):
+        remote_data = server_res.get("data", "")
+        messages = server_res.get("messages", [])
+        playeritems = server_res.get("playeritems", [])
+        
+        if len(remote_data) == len(KEYITEM_ORDER):
+            items_received = []
+            for i, k in enumerate(KEYITEM_ORDER):
+                remote_has_item = (remote_data[i] == '1')
+                if remote_has_item and not self.local_items[k] and k != "EndGame":
+                    # Item found by teammate, give to local player
+                    self.game.give_item(k, u8)
+                    self.remotely_granted_items.add(k)
+                    items_received.append(k)
+                    
+                    # On V1, generate the "who obtained it" message locally
+                    # from sync data. On V2, this message arrives via push
+                    # from the obtainer's client, so skip it here.
+                    if not isinstance(self.server_client, ServerClientV2):
+                        obtainer = playeritems[i] if i < len(playeritems) else "Someone"
+                        msg = self._format_item_message(obtainer, k)
+                        self.game.display_message(msg)
+                        self._log(msg)
+            
+            if items_received:
+                word = "item" if len(items_received) == 1 else "items"
+                items_str = ", ".join(items_received)
+                msg = f"Giving {word} to local player: {items_str}"
+                self.game.display_message(msg)
+                self._log(msg)
+        
+        for msg in messages:
+            self.game.display_message(msg)
+            self._log(msg)
 
     def run(self):
         self._running = True
@@ -304,6 +386,7 @@ class FFRCoopClient:
         
         last_sync_time = 0
         last_data_str = ""
+        first_loop = True
         
         while self._running:
             time.sleep(1)
@@ -313,39 +396,20 @@ class FFRCoopClient:
             if not getattr(self, 'server_ready', True):
                 continue
 
-            u8 = self.read_memory_blocks()
+            u8 = self.game.read_memory_blocks()
             if not u8:
                 continue
                 
-            if not self.is_state_ok(u8):
+            if not self.game.is_state_ok(u8):
                 continue
                 
-            new_local_items = self.get_local_key_items(u8)
+            new_local_items = self.game.get_local_key_items(u8)
             
-            # Print messages for items obtained locally
-            for k in KEYITEM_ORDER:
-                if new_local_items[k] and not self.local_items[k]:
-                    if k in self.remotely_granted_items:
-                        self.remotely_granted_items.remove(k)
-                    else:
-                        if k == "EndGame":
-                            msg = f"{self.player} has defeated Chaos!"
-                            self.display_message(msg)
-                            self._log(msg)
-                        elif k in self.item_locations:
-                            loc = self.item_locations[k]
-                            msg = f"{self.player} obtained item: {k} (found at {loc})"
-                            self.display_message(msg)
-                            self._log(msg)
-                        else:
-                            msg = f"{self.player} obtained item: {k}"
-                            self.display_message(msg)
-                            self._log(msg)
+            self._process_local_changes(new_local_items, first_loop)
+            first_loop = False
             
-            self.local_items = new_local_items
-            
-            # Convert to string
-            data_str = "".join(["1" if self.local_items[k] else "0" for k in KEYITEM_ORDER])
+            # Convert to string (EndGame is local-only, never synced)
+            data_str = "".join(["1" if (self.local_items[k] and k != "EndGame") else "0" for k in KEYITEM_ORDER])
             
             current_time = time.time()
             if data_str != last_data_str or (current_time - last_sync_time) >= 5:
@@ -355,35 +419,7 @@ class FFRCoopClient:
                 last_data_str = data_str
                 
                 if server_res:
-                    remote_data = server_res.get("data", "")
-                    messages = server_res.get("messages", [])
-                    playeritems = server_res.get("playeritems", [])
-                    
-                    if len(remote_data) == len(KEYITEM_ORDER):
-                        for i, k in enumerate(KEYITEM_ORDER):
-                            remote_has_item = (remote_data[i] == '1')
-                            if remote_has_item and not self.local_items[k]:
-                                # Item found by teammate, give to local player
-                                self.give_item(k, u8)
-                                
-                                obtainer = playeritems[i] if i < len(playeritems) else "Someone"
-                                if k == "EndGame":
-                                    msg = f"{obtainer} has defeated Chaos!"
-                                    self.display_message(msg)
-                                    self._log(msg)
-                                elif k in self.item_locations:
-                                    loc = self.item_locations[k]
-                                    msg = f"{obtainer} obtained item: {k} (found at {loc})"
-                                    self.display_message(msg)
-                                    self._log(msg)
-                                else:
-                                    msg = f"{obtainer} obtained item: {k}"
-                                    self.display_message(msg)
-                                    self._log(msg)
-                    
-                    for msg in messages:
-                        self.display_message(msg)
-                        self._log(msg)
+                    self._process_remote_changes(server_res, u8)
                         
     def stop(self):
         self._running = False

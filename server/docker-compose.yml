@@ -1,0 +1,12 @@
+services:
+  server:
+    build: .
+    restart: always
+    ports:
+      - "5555:5555"
+    volumes:
+      - coop-data:/usr/src/app/data
+    environment:
+      DB_PATH: /usr/src/app/data/coop.db
+volumes:
+  coop-data: {}
