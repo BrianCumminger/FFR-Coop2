@@ -41,10 +41,13 @@ class FFRGameInterface:
             logging.info(message)
 
     def check_shardhunt_mode(self):
-        req = [{"type": "READ", "address": 0x37761, "size": 1, "domain": "PRG ROM"}]
-        res = self.bizhawk.send_command(req)
-        if res and res[0].get("type") == "READ_RESPONSE":
-            val = base64.b64decode(res[0]["value"])
+        reqs = [
+            {"type": "GUARD", "address": 0x3C901, "expected_data": "j6yxpK8=", "domain": "PRG ROM"},
+            {"type": "READ", "address": 0x37761, "size": 1, "domain": "PRG ROM"}
+        ]
+        res = self.bizhawk.send_command(reqs)
+        if res and len(res) == 2 and res[1].get("type") == "READ_RESPONSE":
+            val = base64.b64decode(res[1]["value"])
             if val[0] == 0x1C:
                 self.shardhuntmode = True
                 self._log("Detected Shard Hunt ROM")
@@ -59,17 +62,19 @@ class FFRGameInterface:
         
         # Consolidate reads into two blocks for chests (0x3101-0x31FF) and NPCs (0x47A00-0x47A85)
         reqs = [
+            #GUARD checks for the string "Final" used in the title screen to verify the read is correct
+            {"type": "GUARD", "address": 0x3C901, "expected_data": "j6yxpK8=", "domain": "PRG ROM"},
             {"type": "READ", "address": 0x3100, "size": 0x100, "domain": "PRG ROM"},
             {"type": "READ", "address": 0x47A00, "size": 0x85, "domain": "PRG ROM"}
         ]
             
         res = self.bizhawk.send_command(reqs)
-        if not res or len(res) != 2:
+        if not res or len(res) != 3:
             self._log("Failed to read item locations from ROM.")
             return
             
-        block1 = base64.b64decode(res[0]["value"]) if res[0].get("type") == "READ_RESPONSE" else None
-        block2 = base64.b64decode(res[1]["value"]) if res[1].get("type") == "READ_RESPONSE" else None
+        block1 = base64.b64decode(res[1]["value"]) if res[1].get("type") == "READ_RESPONSE" else None
+        block2 = base64.b64decode(res[2]["value"]) if res[2].get("type") == "READ_RESPONSE" else None
         
         if not block1 or not block2:
             self._log("Failed to parse item location blocks from ROM.")
@@ -97,6 +102,7 @@ class FFRGameInterface:
     def read_memory_blocks(self):
         # We need several blocks from System Bus
         reqs = [
+            {"type": "GUARD", "address": 0x3C901, "expected_data": "j6yxpK8=", "domain": "PRG ROM"},
             {"type": "READ", "address": 0x6000, "size": 0x35, "domain": "System Bus"},  # 0x6000 - 0x6034 (Vehicles and Items)
             {"type": "READ", "address": 0x6200, "size": 0x16, "domain": "System Bus"},  # 0x6200 - 0x6215 (Event flags)
             {"type": "READ", "address": 0x6B86, "size": 1, "domain": "System Bus"},     # 0x6B86 (Chaos animation state)
@@ -106,13 +112,17 @@ class FFRGameInterface:
             {"type": "READ", "address": 0x60FC, "size": 1, "domain": "System Bus"},     # 0x60FC (Battle Type)
         ]
         res = self.bizhawk.send_command(reqs)
-        if not res or len(res) != 7:
+        if not res or len(res) != 8:
+            return None
+            
+        if res[0].get("type") == "GUARD_RESPONSE" and res[0].get("value") is False:
             return None
             
         data = {}
-        for i, r in enumerate(res):
+        for i in range(1, 8):
+            r = res[i]
             if r.get("type") == "READ_RESPONSE":
-                data[i] = base64.b64decode(r["value"])
+                data[i - 1] = base64.b64decode(r["value"])
             else:
                 return None
                 
@@ -137,6 +147,10 @@ class FFRGameInterface:
         return u8
 
     def is_state_ok(self, u8):
+        # Validate memory integrity. Key item slots should strictly be 0x00 or 0x01.
+        # If they are higher, WRAM is not properly initialized and the read should abort.
+        if u8(0x6021) > 1 or u8(0x6022) > 1 or u8(0x6025) > 1: return False
+        
         # party has been created
         if u8(0x6102) == 0: return False
         # chaos shaking animation
@@ -194,7 +208,7 @@ class FFRGameInterface:
         return k
 
     def give_item(self, item, u8):
-        reqs = []
+        reqs = [{"type": "GUARD", "address": 0x3C901, "expected_data": "j6yxpK8=", "domain": "PRG ROM"}]
         
         def write_u8(addr, val):
             b64_val = base64.b64encode(bytes([val])).decode('utf-8')
@@ -231,7 +245,7 @@ class FFRGameInterface:
         if item in item_actions:
             item_actions[item]()
 
-        if reqs:
+        if len(reqs) > 1:
             self.bizhawk.send_command(reqs)
 
     def display_message(self, message):
