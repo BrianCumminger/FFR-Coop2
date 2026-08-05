@@ -11,7 +11,7 @@ from bizhawk_client import BizhawkClient
 from itemlocationdata import LOCATIONS, ITEMS
 from server_client import ServerClientV1, ServerClientV2
 
-VERSION = "2.0-b3"
+VERSION = "2.0-b4"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 
