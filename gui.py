@@ -26,7 +26,7 @@ CREDITS_TEXT = """Development:
 MeridianBC
 
 Testing:
-Willcleosis, TrintonGL, monoci85, Falconic, neongrey, MoistMogwai
+Willcleosis, TrintonGL, monoci85, Falconic, neongrey, MoistMogwai, LordFizzleBeef
 
 Special thanks to everyone who has played and given feedback!"""
 
