@@ -9,6 +9,10 @@ import tkinter as tk
 from main import FFRCoopClient, VERSION
 from bizhawk_client import BizhawkClient
 
+def _main_():
+    app = FFRCoopGUI()
+    app.mainloop()
+
 def resource_path(relative_path):
     """ Get absolute path to resource for PyInstaller """
     try:
@@ -347,8 +351,3 @@ class FFRCoopGUI(ctk.CTk):
         if hasattr(self, 'bizhawk'):
             self.bizhawk.stop()
         super().destroy()
-
-
-if __name__ == "__main__":
-    app = FFRCoopGUI()
-    app.mainloop()

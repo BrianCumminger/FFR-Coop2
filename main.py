@@ -1,4 +1,3 @@
-import argparse
 import configparser
 import time
 import urllib.request
@@ -6,11 +5,10 @@ import urllib.parse
 import json
 import base64
 import logging
-import sys
-import random
 from bizhawk_client import BizhawkClient
 from itemlocationdata import LOCATIONS, ITEMS
 from server_client import ServerClientV1, ServerClientV2
+import gui
 
 VERSION = "2.0-b4"
 
@@ -441,44 +439,5 @@ class FFRCoopClient:
         if not hasattr(self, '_external_bizhawk') or not self._external_bizhawk:
             self.bizhawk.stop()
 
-if __name__ == "__main__":
-    config = configparser.ConfigParser()
-    config.read('config.ini')
-    
-    default_server = config.get('Settings', 'ServerAddress', fallback=None)
-    default_player = config.get('Settings', 'DefaultPlayer', fallback=f'LazyRacer{random.randint(1000, 9999)}')
-
-    parser = argparse.ArgumentParser(description="FFR Coop Python CLI Client")
-    parser.add_argument("--player", type=str, default=default_player, help="Player name")
-    parser.add_argument("--join", type=str, help="Team number to join")
-    parser.add_argument("--init", type=int, nargs="?", const=50, metavar="LIMIT", help="Initialize a new team with player limit (default 50)")
-    parser.add_argument("--server", type=str, default=default_server, help="Server address/port (e.g., ffr.dpldocs.info:5555)")
-    
-    args = parser.parse_args()
-    if not args.server:
-        print("Error: ServerAddress is not configured in config.ini and no --server argument was provided.")
-        sys.exit(1)
-
-    if not args.join and not args.init:
-        print("Error: Must specify either --join <team number> to join, or --init [limit] to create a team.")
-        sys.exit(1)
-
-    try:
-        client = FFRCoopClient(server=args.server, player=args.player, team=args.join)
-    except ConnectionError as e:
-        print(f"Error: {e}")
-        sys.exit(1)
-
-    try:
-        if args.init:
-            client.initialize_team(args.init)
-        else:
-            client.join_team()
-            
-        client.run()
-    except ConnectionError as e:
-        print(f"Error: {e}")
-        sys.exit(1)
-    except KeyboardInterrupt:
-        print("\nShutting down...")
-        sys.exit(0)
+if __name__ == '__main__':
+    gui._main_()
