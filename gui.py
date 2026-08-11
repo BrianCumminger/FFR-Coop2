@@ -4,6 +4,7 @@ import threading
 import datetime
 import sys
 import os
+import random
 import tkinter as tk
 from main import FFRCoopClient, VERSION
 from bizhawk_client import BizhawkClient
@@ -74,7 +75,7 @@ class FFRCoopGUI(ctk.CTk):
         config_files_read = self.config.read('config.ini')
         self.is_first_run = len(config_files_read) == 0
         self.default_server = self.config.get('Settings', 'ServerAddress', fallback='')
-        self.default_player = self.config.get('Settings', 'DefaultPlayer', fallback='LazyRacer')
+        self.default_player = self.config.get('Settings', 'DefaultPlayer', fallback=f'LazyRacer{random.randint(1000, 9999)}')
         self.show_timestamps = self.config.getboolean('Settings', 'ShowTimestamps', fallback=True)
         self.appearance_mode = self.config.get('Settings', 'AppearanceMode', fallback='System')
         
