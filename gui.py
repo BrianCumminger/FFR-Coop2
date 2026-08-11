@@ -282,6 +282,7 @@ class FFRCoopGUI(ctk.CTk):
     def on_connect(self):
         if self.client and self.client._running:
             self.client.stop()
+            self.lbl_status_icon.configure(image=self.img_disconnected)
             self.btn_connect.configure(text="Connect", fg_color=["#3a7ebf", "#1f538d"])
             self.log("Disconnected.")
             return
