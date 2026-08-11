@@ -7,6 +7,7 @@ import json
 import base64
 import logging
 import sys
+import random
 from bizhawk_client import BizhawkClient
 from itemlocationdata import LOCATIONS, ITEMS
 from server_client import ServerClientV1, ServerClientV2
@@ -446,7 +447,7 @@ if __name__ == "__main__":
     config.read('config.ini')
     
     default_server = config.get('Settings', 'ServerAddress', fallback=None)
-    default_player = config.get('Settings', 'DefaultPlayer', fallback='LazyRacer')
+    default_player = config.get('Settings', 'DefaultPlayer', fallback=f'LazyRacer{random.randint(1000, 9999)}')
 
     parser = argparse.ArgumentParser(description="FFR Coop Python CLI Client")
     parser.add_argument("--player", type=str, default=default_player, help="Player name")

@@ -87,8 +87,8 @@ class FFRCoopGUI(ctk.CTk):
         self.bizhawk.add_connection_callback(self.on_bizhawk_connection_change)
 
         # Status Images
-        self.img_disconnected = tk.PhotoImage(file=resource_path(r"resources\th4.png"))
-        self.img_connected = tk.PhotoImage(file=resource_path(r"resources\th3.png"))
+        self.img_disconnected = tk.PhotoImage(file=resource_path(r"resources\th4.gif"))
+        self.img_connected = tk.PhotoImage(file=resource_path(r"resources\th3.gif"))
 
         self.lbl_status_icon = ctk.CTkLabel(self, text="", image=self.img_disconnected)
 
