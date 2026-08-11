@@ -269,8 +269,7 @@ class FFRCoopClient:
         elif self.server_version == "0.13;0.13":
             self.server_client = ServerClientV1(server, player, team, log_callback=self._log)
         else:
-            self._log(f"Warning: Unknown or empty server version '{self.server_version}'. Defaulting to V1 client.")
-            self.server_client = ServerClientV1(server, player, team, log_callback=self._log)
+            raise ConnectionError(f"Unsupported server version '{self.server_version}'")
             
         self.bizhawk = bizhawk_client if bizhawk_client else BizhawkClient(auto_start=True)
         self._external_bizhawk = bool(bizhawk_client)
@@ -285,13 +284,13 @@ class FFRCoopClient:
         self._running = False
 
     def _get_server_version(self):
+        """Fetch the server version. Returns "2.0" or "0.13;0.13", or raises ConnectionError."""
         url = f"http://{self.server}/version"
         try:
             with urllib.request.urlopen(url, timeout=5) as response:
                 return response.read().decode('utf-8').strip()
         except Exception as e:
-            self._log(f"Warning: Could not fetch server version: {e}")
-            return ""
+            raise ConnectionError(f"Could not connect to server at {self.server} ({e})")
         
     def _bizhawk_connection_callback(self, connected):
         if connected:
@@ -464,8 +463,12 @@ if __name__ == "__main__":
         print("Error: Must specify either --join <team number> to join, or --init [limit] to create a team.")
         sys.exit(1)
 
-    client = FFRCoopClient(server=args.server, player=args.player, team=args.join)
-    
+    try:
+        client = FFRCoopClient(server=args.server, player=args.player, team=args.join)
+    except ConnectionError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
     try:
         if args.init:
             client.initialize_team(args.init)
@@ -473,6 +476,9 @@ if __name__ == "__main__":
             client.join_team()
             
         client.run()
+    except ConnectionError as e:
+        print(f"Error: {e}")
+        sys.exit(1)
     except KeyboardInterrupt:
         print("\nShutting down...")
         sys.exit(0)
