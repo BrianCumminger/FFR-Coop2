@@ -1,4 +1,5 @@
 import configparser
+import re
 import time
 import urllib.request
 import urllib.parse
@@ -18,6 +19,14 @@ KEYITEM_ORDER = [
     "Lute", "Crown", "Crystal", "Herb", "Key", "TNT", "Adamant", "Slab", "Ruby",
     "Rod", "Floater", "Chime", "Tail", "Cube", "Bottle", "Oxyale", "Ship", "Canoe",
     "Airship", "Bridge", "Canal", "SlabTranslation", "EarthOrb", "FireOrb", "WaterOrb", "AirOrb", "EndGame"
+]
+
+# Shard Hunt detection rules: (threshold_version, address, expected_value)
+# Listed in descending order; the first entry where detected_version >= threshold wins.
+SHARDHUNT_CHECKS = [
+    ((4, 9, 8), 0x7BDFE, 0x53),   # 4.9.8 writes mode explicitly
+    ((4, 8, 1), 0x48F61, 0x1C),   # 4.8.1 moved the shard icon
+    ((4, 8, 0), 0x37761, 0x1C),   # 4.8.0 and earlier (default)
 ]
 
 class FFRGameInterface:
@@ -40,18 +49,66 @@ class FFRGameInterface:
             logging.info(message)
 
     def check_shardhunt_mode(self):
+        # Step 1: Read the info string at 0x7BE00 to extract the randomizer version.
         reqs = [
             {"type": "GUARD", "address": 0x3C901, "expected_data": "j6yxpK8=", "domain": "PRG ROM"},
-            {"type": "READ", "address": 0x37761, "size": 1, "domain": "PRG ROM"}
+            {"type": "READ", "address": 0x7BE00, "size": 0x200, "domain": "PRG ROM"},
         ]
         res = self.bizhawk.send_command(reqs)
-        if res and len(res) == 2 and res[1].get("type") == "READ_RESPONSE":
-            val = base64.b64decode(res[1]["value"])
-            if val[0] == 0x1C:
+        if not res or len(res) != 2 or res[0].get("type") != "GUARD_RESPONSE" or res[0].get("value") is not True:
+            self._log("Failed to verify PRG ROM for Shard Hunt detection. Defaulting to standard mode.")
+            return
+
+        # Step 2: Parse the version from the info string.
+        version_tuple = None
+        try:
+            raw_bytes = base64.b64decode(res[1]["value"])
+            null_pos = raw_bytes.find(0x00)
+            if null_pos != -1:
+                raw_bytes = raw_bytes[:null_pos]
+            info_str = raw_bytes.decode("ascii", errors="replace")
+
+            match = re.search(r"Version:\s*(\d+)[.\-](\d+)[.\-](\d+)", info_str)
+            is_beta = bool(re.search(r"Version:\s*beta", info_str, re.IGNORECASE))
+            if match:
+                version_tuple = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+                self._log(f"Detected randomizer version {match.group(1)}.{match.group(2)}.{match.group(3)}")
+            elif is_beta:
+                # Beta builds (e.g. "Version: beta-SHA") should be treated as the newest version.
+                version_tuple = (9999, 9999, 9999)
+                self._log("Detected randomizer beta build, assuming newest version.")
+            else:
+                self._log("Failed to parse version from ROM info string. Defaulting to standard detection.")
+        except Exception as e:
+            self._log(f"Error reading version from ROM: {e}. Defaulting to standard detection.")
+
+        # Step 3: Select the appropriate shard hunt check based on version.
+        check_addr = None
+        check_val = None
+        if version_tuple is not None:
+            for threshold, addr, expected in SHARDHUNT_CHECKS:
+                if version_tuple >= threshold:
+                    check_addr = addr
+                    check_val = expected
+                    break
+
+        if check_addr is None:
+            # Fallback to the default (last entry in SHARDHUNT_CHECKS).
+            check_addr = SHARDHUNT_CHECKS[-1][1]
+            check_val = SHARDHUNT_CHECKS[-1][2]
+
+        # Step 4: Read the shard hunt flag at the version-appropriate address.
+        reqs2 = [
+            {"type": "READ", "address": check_addr, "size": 1, "domain": "PRG ROM"},
+        ]
+        res2 = self.bizhawk.send_command(reqs2)
+        if res2 and len(res2) == 1 and res2[0].get("type") == "READ_RESPONSE":
+            val = base64.b64decode(res2[0]["value"])
+            if val[0] == check_val:
                 self.shardhuntmode = True
                 self._log("Detected Shard Hunt ROM")
         else:
-            self._log("Failed to read PRG ROM to detect Shard Hunt. Defaulting to standard mode.")
+            self._log("Failed to read shard hunt flag. Defaulting to standard mode.")
 
     def read_item_locations_from_rom(self):
         if not self.show_item_locations:
