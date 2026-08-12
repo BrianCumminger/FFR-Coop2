@@ -11,7 +11,7 @@ from itemlocationdata import LOCATIONS, ITEMS
 from server_client import ServerClientV1, ServerClientV2
 import gui
 
-VERSION = "2.0-b4"
+VERSION = "2.0-b5"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 
