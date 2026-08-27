@@ -7,11 +7,20 @@ This project is a modern client for FFR Co-op written in Python with TK gui comp
 
 ![screenshot](resources/screenshot.png)
 
-### Prerequisites
-- BizHawk (version 2.4 or later recommended)
-- Python 3.8 or later (if running from source)
-- A Final Fantasy Randomizer ROM.
+### Features of 2.0
+- Easy to use Python GUI with dark mode support.
+- New server uses websockets for instantaneous updates.
+- Client supports both the original server and new server.
+- No extra DLLs to install.
+- Client uses standard [Archipelago](https://archipelago.gg/) connector lua script for communication with [BizHawk](https://tasvideos.org/Bizhawk).
 
+### Prerequisites
+- [BizHawk](https://tasvideos.org/Bizhawk) (version 2.4 or later recommended)
+- Python 3.8 or later (if running from source)
+- A [Final Fantasy Randomizer](https://finalfantasyrandomizer.com/) ROM.
+
+### What is Co-op play mode?
+Co-op play mode for Final Fantasy Randomizer is where 2 or more players share obtained key items over a network connection. Players match up by one player creating a team on the server, and other players joining that team number. All key items (Lute, Ship, Slab, etc), once obtained, will be sent to all other players. This includes orbs and the slab translation. If the ROM generated is a shard hunt ROM, each player will be required to find their own shards - shards are not shared.
 
 ## Running the Client
 ### Windows
@@ -58,5 +67,5 @@ If you prefer to run the server manually without Docker using Python 3.9 or late
 ```bash
 cd server
 pip install -r requirements.txt
-python app.py
+python coop-server.py
 ```
