@@ -15,7 +15,7 @@ This project is a modern client for FFR Co-op written in Python with TK gui comp
 - Client uses standard [Archipelago](https://archipelago.gg/) connector lua script for communication with [BizHawk](https://tasvideos.org/Bizhawk).
 
 ### Prerequisites
-- [BizHawk](https://tasvideos.org/Bizhawk) (version 2.4 or later recommended)
+- [BizHawk](https://tasvideos.org/Bizhawk) emulator (version 2.4 or later recommended)
 - Python 3.8 or later (if running from source)
 - A [Final Fantasy Randomizer](https://finalfantasyrandomizer.com/) ROM.
 
@@ -34,20 +34,22 @@ First, install the required dependencies:
 pip install -r requirements.txt
 ```
 
-You can run the GUI client by executing:
+You can run the client by executing:
 ```bash
-python gui.py
+python main.py
 ```
 
-Alternatively, the CLI client can be used:
-```bash
-# To initialize a new team
-python main.py --player YourName --init
+### Configuration
+Default settings can be configured in the client settings menu or by editing `config.ini`. Config file starts with a `[Settings]` header, followed by the following options:
 
-# To join an existing team
-python main.py --player YourName --join <team_number>
-```
-You can configure default settings, such as the `ServerAddress`, in `config.ini`.
+| Option | Description | Example |
+| --- | --- | --- |
+| `serveraddress` | The address and port of the server | localhost:5555 |
+| `defaultplayer` | The default player name | LazyRacer6442 |
+| `showtimestamps` | Show timestamps in the message window | True |
+| `appearancemode` | Light or dark mode | Dark |
+
+
 
 ## Deploying the Server
 
