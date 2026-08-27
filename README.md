@@ -11,7 +11,7 @@ This project is a modern client for FFR Co-op written in Python with TK gui comp
 - Easy to use Python GUI with dark mode support.
 - New server uses websockets for instantaneous updates.
 - Client supports both the original server and new server.
-- No extra DLLs to install.
+- Nothing extra to install.
 - Client uses standard [Archipelago](https://archipelago.gg/) connector lua script for communication with [BizHawk](https://tasvideos.org/Bizhawk).
 
 ### Prerequisites
