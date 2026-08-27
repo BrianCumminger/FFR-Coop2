@@ -33,7 +33,6 @@ class BaseServerClient:
         raise NotImplementedError
 
     def send_message(self, message):
-        """Send a chat message to teammates. No-op on V1."""
         pass
 
 
@@ -95,9 +94,6 @@ class ServerClientV2(BaseServerClient):
 
     def connect(self):
         """Establish WebSocket connection and start receiver thread."""
-        if websockets is None:
-            raise ImportError("The 'websockets' package is required for V2 server connections. "
-                              "Install it with: pip install websockets")
         self._thread = threading.Thread(target=self._run_event_loop, daemon=True)
         self._thread.start()
         if not self._connected.wait(timeout=10):

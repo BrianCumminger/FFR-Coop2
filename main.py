@@ -11,7 +11,7 @@ from itemlocationdata import LOCATIONS, ITEMS
 from server_client import ServerClientV1, ServerClientV2
 import gui
 
-VERSION = "2.0-b5"
+VERSION = "2.0-b6"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s")
 
@@ -76,7 +76,7 @@ class FFRGameInterface:
             elif is_beta:
                 # Beta builds (e.g. "Version: beta-SHA") should be treated as the newest version.
                 version_tuple = (9999, 9999, 9999)
-                self._log("Detected randomizer beta build, assuming newest version.")
+                self._log("Detected beta randomizer build, assuming newest version.")
             else:
                 self._log("Failed to parse version from ROM info string. Defaulting to standard detection.")
         except Exception as e:

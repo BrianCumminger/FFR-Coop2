@@ -10,7 +10,12 @@ echo Copying bizhawk-connector to dist...
 xcopy /E /I /Y bizhawk-connector dist\bizhawk-connector
 
 set "PATH=%~dp0;%PATH%"
+
+echo Extracting version from main.py...
+for /f "delims=" %%I in ('python -c "import re; print(re.search(r'VERSION\s*=\s*\x22([^\x22]+)\x22', open('main.py').read()).group(1))"') do set "VERSION=%%I"
+echo Building version: %VERSION%
+
 cd dist
-7z a coop2.zip * -x!config.ini
+7z a FFR-Coop-%VERSION%-Windows.zip * -x!config.ini
 cd ..
 endlocal
